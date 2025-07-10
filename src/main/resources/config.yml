@@ -1,0 +1,62 @@
+allowWorlds:  # รองรับ mutiverse-core
+  - world
+  - world_nether
+  - world_the_end
+
+radius:  # ระยะวาปนับจาก พิกัด 0 0
+  world: 2000
+  world_nether: 2000
+  world_the_end: 2000
+
+cooldown:
+  enabled: true
+  seconds: 5        # RTP ได้ 1 ครั้งต่อ 5 วินาที
+  message: "&cกรุณารออีก {cooldown} วินาทีก่อนสุ่มวาร์ปอีกครั้ง!"
+
+gui:
+  title: "&aเลือกโลกสุ่มวาร์ป"
+  slots:
+    world: 11
+    world_nether: 13
+    world_the_end: 15
+  icons:
+    world:
+      material: GRASS_BLOCK
+      name: "&aสุ่มวาร์ป Overworld"
+      lore:
+        - "&7ออนไลน์: %bsru_online_world_world%"
+        - "&7คลิกเพื่อสุ่มจุดวาร์ป"
+    world_nether:
+      material: NETHERRACK
+      name: "&cสุ่มวาร์ป Nether"
+      lore:
+        - "&7ออนไลน์: %bsru_online_world_world_nether%"
+        - "&7คลิกเพื่อสุ่มจุดวาร์ป"
+    world_the_end:
+      material: END_STONE
+      name: "&dสุ่มวาร์ป The End"
+      lore:
+        - "&7ออนไลน์: %bsru_online_world_world_the_end%"
+        - "&7คลิกเพื่อสุ่มจุดวาร์ป"
+
+sounds:
+  gui_click: "ui.button.click"
+  waiting: "entity.enderman.teleport"
+  teleport: "entity.player.levelup"
+  fail: "block.note_block.bass"
+  cancel_on_move: "ENTITY_VILLAGER_NO"
+
+messages:
+  no_permission: "&cคุณไม่มีสิทธิ์ใช้งานคำสั่งนี้"
+  reload_success: "&aรีโหลด config สำเร็จ!"
+  reload_failed: "&cรีโหลด config ล้มเหลว!"
+  world_not_allowed: "&cโลกนี้ไม่เปิดให้สุ่มวาร์ป"
+  already_in_rtp: "&cคุณกำลังรอวาร์ปอยู่แล้ว"
+  world_not_found: "&cไม่พบโลกนี้"
+  teleport_fail: "&cสุ่มจุดวาร์ปล้มเหลว กรุณาลองใหม่"
+  teleport_success: "&aวาร์ปสำเร็จ! ไปยัง {location}"
+  rtp_start: "&eสุ่มวาร์ปในอีก {seconds} วินาที ห้ามออกจากบล็อคที่ยืนอยู่!"
+  countdown_actionbar: "&eสุ่มวาร์ปในอีก {seconds} วิ"
+  rtp_cancel_move: "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"
+  rtp_cancel_world: "&cยกเลิกวาร์ปเพราะคุณเปลี่ยนโลก"
+

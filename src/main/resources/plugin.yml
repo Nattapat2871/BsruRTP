@@ -1,0 +1,15 @@
+name: bsruRTP
+main: com.bsru.bsruRTP
+version: 1.0
+api-version: 1.21
+commands:
+  rtp:
+    description: Random Teleport GUI
+    usage: /rtp
+  bsrurtp:
+    description: Reload config for bsruRTP
+    usage: /bsrurtp reload
+
+permissions:
+  bsruRTP.use:
+    default: true

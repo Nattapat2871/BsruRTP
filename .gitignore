@@ -1,0 +1,9 @@
+# Compiled output from Maven
+/target/
+
+# Log files
+*.log
+
+# IDE files from IntelliJ
+/.idea/
+*.iml
