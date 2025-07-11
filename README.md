@@ -44,7 +44,7 @@ A powerful and versatile Random Teleport (RTP) plugin for Spigot/Paper servers. 
 ---
 ## 🛠️ Installation
 
-1.  Download the latest `.jar` file from the [Releases](https://github.com/Nattapat2871/BsruRTP/releases) page.
+1.  Download the latest `.jar` file from the [Modrinth](https://modrinth.com/plugin/bsrurtp) or [Releases](https://github.com/Nattapat2871/BsruRTP/releases) page.
 2.  Place the downloaded `.jar` file into your server's `/plugins` directory.
 3.  (Optional) Install [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.624/) for placeholder support.
 4.  Start or restart your server.
