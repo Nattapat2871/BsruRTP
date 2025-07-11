@@ -39,6 +39,9 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
     private ZoneManager zoneManager;
     private final Map<String, BukkitTask> zoneCountdownTasks = new HashMap<>();
     private final Map<String, Integer> zoneCountdownSeconds = new ConcurrentHashMap<>();
+    // [เพิ่ม] Map สำหรับติดตามว่าผู้เล่นคนไหนอยู่ในโซนไหน
+    private final Map<UUID, String> playerCurrentZone = new ConcurrentHashMap<>();
+
 
     // Getters for PlaceholderAPI expansion
     public ZoneManager getZoneManager() { return zoneManager; }
@@ -62,13 +65,11 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
             getLogger().info("Successfully hooked into PlaceholderAPI!");
         }
 
-        // Start all looping zone timers
         startAllZoneTimers();
     }
 
     @Override
     public void onDisable() {
-        // Cancel all ZoneRTP tasks when the plugin is disabled
         for (BukkitTask task : zoneCountdownTasks.values()) {
             task.cancel();
         }
@@ -77,14 +78,12 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
     }
 
     private void startAllZoneTimers() {
-        // Cancel any old tasks (useful for reloads)
         for (BukkitTask task : zoneCountdownTasks.values()) {
             task.cancel();
         }
         zoneCountdownTasks.clear();
         zoneCountdownSeconds.clear();
 
-        // Start a new looping timer for each defined zone
         for (Zone zone : zoneManager.getAllZones()) {
             startZoneCountdownLoop(zone);
         }
@@ -108,9 +107,7 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
         }
 
         if (cmd.getName().equalsIgnoreCase("bsrurtp")) {
-            // [แก้ไข] ยกเครื่องคำสั่ง /bsrurtp ใหม่ทั้งหมด
             if (args.length == 0) {
-                // แสดงข้อมูลปลั๊กอินเมื่อพิมพ์ /bsrurtp เฉยๆ
                 p.sendMessage(color("&8&m----------------------------------"));
                 p.sendMessage(color("&b&l         bsruRTP Plugin"));
                 p.sendMessage(color(""));
@@ -373,22 +370,57 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
         countdownTasks.put(p.getUniqueId(), task);
     }
 
+    // [แก้ไข] ยกเครื่อง onPlayerMove ใหม่ทั้งหมด
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent e) {
         Player p = e.getPlayer();
+        Location to = e.getTo();
+        Location from = e.getFrom();
+
+        // --- ส่วนที่ 1: ตรวจสอบการยกเลิกของ /rtp ปกติ ---
         if (waitingPlayers.containsKey(p.getUniqueId())) {
             Location oldLoc = waitingPlayers.get(p.getUniqueId());
-            Location newLoc = e.getTo();
-            if (oldLoc != null && (oldLoc.getBlockX() != newLoc.getBlockX() || oldLoc.getBlockY() != newLoc.getBlockY() || oldLoc.getBlockZ() != newLoc.getBlockZ())) {
+            if (oldLoc != null && (oldLoc.getBlockX() != to.getBlockX() || oldLoc.getBlockY() != to.getBlockY() || oldLoc.getBlockZ() != to.getBlockZ())) {
                 playSound(p, getConfig().getString("sounds.cancel_on_move", "ENTITY_VILLAGER_NO"));
                 cancelRTP(p, getConfig().getString("messages.rtp_cancel_move", "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"));
             }
+        }
+
+        // --- ส่วนที่ 2: ตรวจสอบการเข้า/ออก ZoneRTP ---
+        // เช็คเมื่อมีการขยับข้ามบล็อกเท่านั้น เพื่อประสิทธิภาพ
+        if (from.getBlockX() == to.getBlockX() && from.getBlockY() == to.getBlockY() && from.getBlockZ() == to.getBlockZ()) {
+            return;
+        }
+
+        String previousZoneName = playerCurrentZone.get(p.getUniqueId());
+        String currentZoneName = null;
+
+        // หาว่าตอนนี้ผู้เล่นอยู่ในโซนไหน
+        for (Zone zone : zoneManager.getAllZones()) {
+            if (isPlayerInZone(p, zone)) {
+                currentZoneName = zone.getName();
+                break;
+            }
+        }
+
+        // เปรียบเทียบโซนเก่ากับโซนใหม่
+        if (currentZoneName != null && !currentZoneName.equalsIgnoreCase(previousZoneName)) {
+            // ผู้เล่นเดินเข้าโซนใหม่
+            playerCurrentZone.put(p.getUniqueId(), currentZoneName);
+            playSound(p, getConfig().getString("sounds.zone_enter", "BLOCK_BEACON_POWER_SELECT"));
+        } else if (currentZoneName == null && previousZoneName != null) {
+            // ผู้เล่นเดินออกจากโซนเดิม
+            playerCurrentZone.remove(p.getUniqueId());
         }
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent e) {
-        cancelRTP(e.getPlayer(), null);
+        Player p = e.getPlayer();
+        // ยกเลิก /rtp ปกติ
+        cancelRTP(p, null);
+        // [เพิ่ม] ลบผู้เล่นออกจาก Map ของโซนด้วย
+        playerCurrentZone.remove(p.getUniqueId());
     }
 
     @EventHandler
@@ -460,6 +492,7 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
                 }
 
                 if (timeRemaining <= 0) {
+                    // เช็คผู้เล่นอีกครั้ง ณ วินาทีสุดท้าย
                     List<Player> playersToTeleport = Bukkit.getOnlinePlayers().stream()
                             .filter(player -> isPlayerInZone(player, zone))
                             .collect(Collectors.toList());
@@ -476,6 +509,7 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
                             }
                         }
                     }
+                    // รีเซ็ตเวลาเพื่อเริ่มนับใหม่
                     timeRemaining = zone.getCountdown();
                 } else {
                     timeRemaining--;
@@ -561,8 +595,10 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
     private void playSound(Player p, String sound) {
         if (sound == null || sound.isEmpty()) return;
         try {
-            String soundKey = sound.toUpperCase(Locale.ROOT).replace("MINECRAFT:", "");
-            Sound s = Sound.valueOf(soundKey);
+            // Sound names in 1.20+ are lowercase and don't use the legacy names
+            // This tries to normalize it, but using modern keys like "ui.button.click" is best
+            String soundKey = sound.toLowerCase(Locale.ROOT);
+            Sound s = Sound.valueOf(sound.toUpperCase(Locale.ROOT)); // Keep legacy support for now
             p.playSound(p.getLocation(), s, SoundCategory.MASTER, 1.0f, 1.0f);
         } catch (IllegalArgumentException e) {
             getLogger().warning("Invalid sound name in config: " + sound);

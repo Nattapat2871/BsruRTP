@@ -46,6 +46,7 @@ sounds:
   teleport: "entity.player.levelup"
   fail: "block.note_block.bass"
   cancel_on_move: "ENTITY_VILLAGER_NO"
+  zone_enter: "block.beacon.power_select"
   zone_countdown_tick: "BLOCK_NOTE_BLOCK_HAT"
   zone_teleport: "ENTITY_ENDERMAN_TELEPORT"
 
@@ -62,6 +63,6 @@ messages:
   countdown_actionbar: "&eสุ่มวาร์ปในอีก {seconds} วิ"
   rtp_cancel_move: "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"
   rtp_cancel_world: "&cยกเลิกวาร์ปเพราะคุณเปลี่ยนโลก"
-  zone_countdown_title: "&a&lRTP ZONE"
+  zone_countdown_title: "&c&lRTP ZONE"
   zone_countdown_subtitle: "&fวาร์ปในอีก &e{seconds} &fวินาที!"
   zone_teleport_success: "&bคุณถูกวาร์ปโดย RTP Zone!"
