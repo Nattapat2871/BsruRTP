@@ -1,3 +1,6 @@
+# [ย้ายมาไว้ตรงนี้] ความสูงในการตรวจสอบผู้เล่นใน ZoneRTP
+zone-vertical-check-height: 4
+
 allowWorlds:  # รองรับ mutiverse-core
   - world
   - world_nether
@@ -24,19 +27,17 @@ gui:
       material: GRASS_BLOCK
       name: "&aสุ่มวาร์ป Overworld"
       lore:
-        - "&7ออนไลน์: %bsru_online_world_world%"
+        - "&7ออนไลน์: %server_online%"
         - "&7คลิกเพื่อสุ่มจุดวาร์ป"
     world_nether:
       material: NETHERRACK
       name: "&cสุ่มวาร์ป Nether"
       lore:
-        - "&7ออนไลน์: %bsru_online_world_world_nether%"
         - "&7คลิกเพื่อสุ่มจุดวาร์ป"
     world_the_end:
       material: END_STONE
       name: "&dสุ่มวาร์ป The End"
       lore:
-        - "&7ออนไลน์: %bsru_online_world_world_the_end%"
         - "&7คลิกเพื่อสุ่มจุดวาร์ป"
 
 sounds:
@@ -45,6 +46,8 @@ sounds:
   teleport: "entity.player.levelup"
   fail: "block.note_block.bass"
   cancel_on_move: "ENTITY_VILLAGER_NO"
+  zone_countdown_tick: "BLOCK_NOTE_BLOCK_HAT"
+  zone_teleport: "ENTITY_ENDERMAN_TELEPORT"
 
 messages:
   no_permission: "&cคุณไม่มีสิทธิ์ใช้งานคำสั่งนี้"
@@ -59,4 +62,6 @@ messages:
   countdown_actionbar: "&eสุ่มวาร์ปในอีก {seconds} วิ"
   rtp_cancel_move: "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"
   rtp_cancel_world: "&cยกเลิกวาร์ปเพราะคุณเปลี่ยนโลก"
-
+  zone_countdown_title: "&a&lRTP ZONE"
+  zone_countdown_subtitle: "&fวาร์ปในอีก &e{seconds} &fวินาที!"
+  zone_teleport_success: "&bคุณถูกวาร์ปโดย RTP Zone!"

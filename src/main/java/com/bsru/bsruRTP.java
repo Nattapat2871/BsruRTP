@@ -1,8 +1,8 @@
 package com.bsru;
 
-import me.clip.placeholderapi.PlaceholderAPI; // [เพิ่ม] แก้ปัญหา Cannot resolve symbol 'me'
-import org.bukkit.*; // [เพิ่ม] Import คลาสหลักๆทั้งหมด
-import org.bukkit.block.Block; // [เพิ่ม] แก้ปัญหา Cannot resolve symbol 'Block'
+import me.clip.placeholderapi.PlaceholderAPI;
+import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -21,25 +21,74 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.StringUtil;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
 
+    // Maps for standard /rtp
     private final Map<UUID, Long> rtpCooldown = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> countdownTasks = new ConcurrentHashMap<>();
     private final Map<UUID, Location> waitingPlayers = new ConcurrentHashMap<>();
     private String guiTitle;
 
+    // ZoneRTP components
+    private ZoneManager zoneManager;
+    private final Map<String, BukkitTask> zoneCountdownTasks = new HashMap<>();
+    private final Map<String, Integer> zoneCountdownSeconds = new ConcurrentHashMap<>();
+
+    // Getters for PlaceholderAPI expansion
+    public ZoneManager getZoneManager() { return zoneManager; }
+    public Map<String, Integer> getZoneCountdownSeconds() { return zoneCountdownSeconds; }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        this.zoneManager = new ZoneManager(this);
+
         reloadTitle();
         getServer().getPluginManager().registerEvents(this, this);
 
         Objects.requireNonNull(getCommand("rtp")).setExecutor(this);
         Objects.requireNonNull(getCommand("bsrurtp")).setExecutor(this);
+        Objects.requireNonNull(getCommand("zonertp")).setExecutor(this);
+
+        // Hook into PlaceholderAPI
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new ZonePlaceholders(this).register();
+            getLogger().info("Successfully hooked into PlaceholderAPI!");
+        }
+
+        // Start all looping zone timers
+        startAllZoneTimers();
+    }
+
+    @Override
+    public void onDisable() {
+        // Cancel all ZoneRTP tasks when the plugin is disabled
+        for (BukkitTask task : zoneCountdownTasks.values()) {
+            task.cancel();
+        }
+        zoneCountdownTasks.clear();
+        getLogger().info("All ZoneRTP tasks have been cancelled.");
+    }
+
+    private void startAllZoneTimers() {
+        // Cancel any old tasks (useful for reloads)
+        for (BukkitTask task : zoneCountdownTasks.values()) {
+            task.cancel();
+        }
+        zoneCountdownTasks.clear();
+        zoneCountdownSeconds.clear();
+
+        // Start a new looping timer for each defined zone
+        for (Zone zone : zoneManager.getAllZones()) {
+            startZoneCountdownLoop(zone);
+        }
+        getLogger().info("Started " + zoneCountdownTasks.size() + " looping ZoneRTP timers.");
     }
 
     private void reloadTitle() {
@@ -48,7 +97,10 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!(sender instanceof Player p)) return false;
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage("This command can only be run by a player.");
+            return true;
+        }
 
         if (cmd.getName().equalsIgnoreCase("rtp")) {
             openRTPGUI(p);
@@ -56,20 +108,150 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
         }
 
         if (cmd.getName().equalsIgnoreCase("bsrurtp")) {
-            if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
-                reloadConfig();
-                reloadTitle();
-                p.sendMessage(color(getConfig().getString("messages.reload_success", "&aรีโหลด config สำเร็จ!")));
-            } else {
+            // [แก้ไข] ยกเครื่องคำสั่ง /bsrurtp ใหม่ทั้งหมด
+            if (args.length == 0) {
+                // แสดงข้อมูลปลั๊กอินเมื่อพิมพ์ /bsrurtp เฉยๆ
                 p.sendMessage(color("&8&m----------------------------------"));
                 p.sendMessage(color("&b&l         bsruRTP Plugin"));
                 p.sendMessage(color(""));
-                p.sendMessage(color("&e  สร้างโดย: &fNattapat2871"));
-                p.sendMessage(color("&e  ความสามารถ: &fปลั๊กอินสุ่มวาร์ปผ่าน GUI"));
-                p.sendMessage(color("&e  GitHub: &fhttps://github.com/Nattapat2871/BsruRTP"));
+                p.sendMessage(color("&e  Created by: &fNattapat2871"));
+                p.sendMessage(color("&e  GitHub: &fgithub.com/Nattapat2871/BsruRTP"));
                 p.sendMessage(color(""));
-                p.sendMessage(color("&7  ใช้ &a/bsrurtp reload &7เพื่อรีโหลดปลั๊กอิน"));
+                p.sendMessage(color("&7  Use &a/bsrurtp help &7for a list of commands."));
                 p.sendMessage(color("&8&m----------------------------------"));
+                return true;
+            }
+
+            String subCommand = args[0].toLowerCase();
+            switch (subCommand) {
+                case "reload":
+                    if (!p.hasPermission("bsrurtp.reload")) {
+                        p.sendMessage(ChatColor.RED + "You don't have permission.");
+                        return true;
+                    }
+                    reloadConfig();
+                    zoneManager.loadZones();
+                    reloadTitle();
+                    startAllZoneTimers();
+                    p.sendMessage(color(getConfig().getString("messages.reload_success", "&aConfig reloaded successfully!")));
+                    break;
+
+                case "help":
+                    p.sendMessage(color("&8&m---------- &b&lBsruRTP Help &8&m----------"));
+                    p.sendMessage(color("&e/rtp &7- Opens the Random Teleport GUI."));
+                    p.sendMessage(color("&e/bsrurtp help &7- Shows this help message."));
+                    p.sendMessage(color("&e/bsrurtp reload &7- Reloads the plugin's config."));
+                    p.sendMessage(color("&e/bsrurtp status &7- Shows the plugin's status."));
+                    p.sendMessage(color("&e/bsrurtp tpzone <zone> &7- Teleports you to a zone's center."));
+                    p.sendMessage(color("&e/zonertp create ... &7- Creates a new RTP zone."));
+                    p.sendMessage(color("&e/zonertp remove <zone> &7- Removes an RTP zone."));
+                    p.sendMessage(color("&8&m------------------------------------"));
+                    break;
+
+                case "status":
+                    if (!p.hasPermission("bsrurtp.status")) {
+                        p.sendMessage(ChatColor.RED + "You don't have permission.");
+                        return true;
+                    }
+                    boolean papiHook = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
+                    p.sendMessage(color("&8&m---------- &b&lBsruRTP Status &8&m---------"));
+                    p.sendMessage(color("&eLoaded Zones: &f" + zoneManager.getAllZones().size()));
+                    p.sendMessage(color("&eActive Timers: &f" + zoneCountdownTasks.size()));
+                    p.sendMessage(color("&ePlaceholderAPI Hook: " + (papiHook ? "&aConnected" : "&cNot Found")));
+                    p.sendMessage(color("&8&m------------------------------------"));
+                    break;
+
+                case "tpzone":
+                    if (!p.hasPermission("bsrurtp.tpzone")) {
+                        p.sendMessage(ChatColor.RED + "You don't have permission.");
+                        return true;
+                    }
+                    if (args.length < 2) {
+                        p.sendMessage(ChatColor.RED + "Usage: /bsrurtp tpzone <zone_name>");
+                        return true;
+                    }
+                    Zone zoneToTp = zoneManager.getZone(args[1]);
+                    if (zoneToTp == null) {
+                        p.sendMessage(ChatColor.RED + "Zone '" + args[1] + "' not found.");
+                        return true;
+                    }
+                    Location center = zoneToTp.getCenter();
+                    if (center != null) {
+                        p.teleport(center);
+                        p.sendMessage(ChatColor.GREEN + "Teleported to the center of zone '" + args[1] + "'.");
+                    } else {
+                        p.sendMessage(ChatColor.RED + "Could not find the location for zone '" + args[1] + "'.");
+                    }
+                    break;
+
+                default:
+                    p.sendMessage(ChatColor.RED + "Unknown command. Use /bsrurtp help.");
+                    break;
+            }
+            return true;
+        }
+
+        if (cmd.getName().equalsIgnoreCase("zonertp")) {
+            if (!p.hasPermission("bsrurtp.admin.zone")) {
+                p.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                return true;
+            }
+
+            if (args.length == 0) {
+                p.sendMessage(ChatColor.GOLD + "Usage: /zonertp <create|remove>");
+                return true;
+            }
+
+            if (args[0].equalsIgnoreCase("create")) {
+                if (args.length < 4) {
+                    p.sendMessage(ChatColor.RED + "Usage: /zonertp create <name> <radius> <target_world> [shape] [block]");
+                    return true;
+                }
+                String name = args[1];
+                int radius;
+                try {
+                    radius = Integer.parseInt(args[2]);
+                } catch (NumberFormatException e) {
+                    p.sendMessage(ChatColor.RED + "Radius must be a number.");
+                    return true;
+                }
+                String targetWorld = args[3];
+                String shape = (args.length > 4) ? args[4] : "SQUARE";
+                String requiredBlock = (args.length > 5) ? args[5] : null;
+
+                if (Bukkit.getWorld(targetWorld) == null) {
+                    p.sendMessage(ChatColor.RED + "World '" + targetWorld + "' not found!");
+                    return true;
+                }
+
+                if (requiredBlock != null && Material.getMaterial(requiredBlock.toUpperCase()) == null) {
+                    p.sendMessage(ChatColor.RED + "Block '" + requiredBlock + "' not found!");
+                    return true;
+                }
+
+                boolean success = zoneManager.createZone(name, p.getLocation(), radius, shape, targetWorld, 30, requiredBlock);
+                if (success) {
+                    p.sendMessage(ChatColor.GREEN + "Successfully created RTP zone '" + name + "'! Reloading timers...");
+                    startAllZoneTimers();
+                } else {
+                    p.sendMessage(ChatColor.RED + "A zone with that name already exists.");
+                }
+
+            } else if (args[0].equalsIgnoreCase("remove")) {
+                if (args.length < 2) {
+                    p.sendMessage(ChatColor.RED + "Usage: /zonertp remove <name>");
+                    return true;
+                }
+                String name = args[1];
+                boolean success = zoneManager.removeZone(name);
+                if (success) {
+                    p.sendMessage(ChatColor.GREEN + "Successfully removed RTP zone '" + name + "'! Reloading timers...");
+                    startAllZoneTimers();
+                } else {
+                    p.sendMessage(ChatColor.RED + "Zone '" + name + "' not found.");
+                }
+            } else {
+                p.sendMessage(ChatColor.GOLD + "Usage: /zonertp <create|remove>");
             }
             return true;
         }
@@ -110,7 +292,8 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
             }
             p.openInventory(gui);
         } catch (Exception e) {
-            p.sendMessage(color("&c[bsruRTP] config.yml ผิดพลาด (GUI)!"));
+            getLogger().severe("An error occurred while opening the RTP GUI!");
+            e.printStackTrace();
         }
     }
 
@@ -170,26 +353,22 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
 
         BukkitRunnable runnable = new BukkitRunnable() {
             int sec = waitSeconds;
-
             @Override
             public void run() {
                 if (!p.isOnline() || !waitingPlayers.containsKey(p.getUniqueId())) {
                     this.cancel();
                     return;
                 }
-
                 if (sec <= 0) {
                     teleportRandom(p, worldId);
                     this.cancel();
                     return;
                 }
-
                 p.sendActionBar(color(getConfig().getString("messages.countdown_actionbar", "&eสุ่มวาร์ปในอีก {seconds} วิ").replace("{seconds}", "" + sec)));
                 playSound(p, getConfig().getString("sounds.waiting", "ENTITY_ENDERMAN_TELEPORT"));
                 sec--;
             }
         };
-
         BukkitTask task = runnable.runTaskTimer(this, 0L, 20L);
         countdownTasks.put(p.getUniqueId(), task);
     }
@@ -197,16 +376,13 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent e) {
         Player p = e.getPlayer();
-        if (!waitingPlayers.containsKey(p.getUniqueId())) return;
-        Location oldLoc = waitingPlayers.get(p.getUniqueId());
-        Location newLoc = p.getLocation();
-
-        if (oldLoc != null && (
-                oldLoc.getBlockX() != newLoc.getBlockX() ||
-                        oldLoc.getBlockY() != newLoc.getBlockY() ||
-                        oldLoc.getBlockZ() != newLoc.getBlockZ())) {
-            playSound(p, getConfig().getString("sounds.cancel_on_move", "ENTITY_VILLAGER_NO"));
-            cancelRTP(p, getConfig().getString("messages.rtp_cancel_move", "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"));
+        if (waitingPlayers.containsKey(p.getUniqueId())) {
+            Location oldLoc = waitingPlayers.get(p.getUniqueId());
+            Location newLoc = e.getTo();
+            if (oldLoc != null && (oldLoc.getBlockX() != newLoc.getBlockX() || oldLoc.getBlockY() != newLoc.getBlockY() || oldLoc.getBlockZ() != newLoc.getBlockZ())) {
+                playSound(p, getConfig().getString("sounds.cancel_on_move", "ENTITY_VILLAGER_NO"));
+                cancelRTP(p, getConfig().getString("messages.rtp_cancel_move", "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"));
+            }
         }
     }
 
@@ -233,7 +409,6 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
         if (task != null) {
             task.cancel();
         }
-
         waitingPlayers.remove(p.getUniqueId());
 
         if (msg != null && p.isOnline()) {
@@ -246,11 +421,108 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
         countdownTasks.remove(p.getUniqueId());
         waitingPlayers.remove(p.getUniqueId());
 
-        World world = Bukkit.getWorld(worldId);
-        if (world == null) {
-            p.sendMessage(color("&c[Error] ไม่พบโลก '" + worldId + "' !"));
+        Location randomLoc = findRandomLocationForZone(worldId);
+
+        if (randomLoc == null) {
+            p.sendMessage(color(getConfig().getString("messages.teleport_fail")));
+            playSound(p, getConfig().getString("sounds.fail", "BLOCK_NOTE_BLOCK_BASS"));
             return;
         }
+
+        rtpCooldown.put(p.getUniqueId(), System.currentTimeMillis() / 1000L);
+        p.teleport(randomLoc);
+        playSound(p, getConfig().getString("sounds.teleport", "ENTITY_PLAYER_LEVELUP"));
+        p.sendMessage(color(getConfig().getString("messages.teleport_success", "&aวาร์ปสำเร็จ! ไปยัง {location}")
+                .replace("{location}", String.format("%.1f, %.1f, %.1f", randomLoc.getX(), randomLoc.getY(), randomLoc.getZ()))));
+    }
+
+    private void startZoneCountdownLoop(Zone zone) {
+        BukkitRunnable runnable = new BukkitRunnable() {
+            int timeRemaining = zone.getCountdown();
+
+            @Override
+            public void run() {
+                zoneCountdownSeconds.put(zone.getName().toLowerCase(), timeRemaining);
+
+                List<Player> playersInZone = Bukkit.getOnlinePlayers().stream()
+                        .filter(player -> isPlayerInZone(player, zone))
+                        .collect(Collectors.toList());
+
+                if (!playersInZone.isEmpty()) {
+                    String title = color(getConfig().getString("messages.zone_countdown_title", "&a&lRTP ZONE"));
+                    String subtitle = color(getConfig().getString("messages.zone_countdown_subtitle", "&fวาร์ปในอีก &e{seconds} &fวินาที!").replace("{seconds}", String.valueOf(timeRemaining)));
+                    String sound = getConfig().getString("sounds.zone_countdown_tick", "BLOCK_NOTE_BLOCK_HAT");
+
+                    for (Player player : playersInZone) {
+                        player.sendTitle(title, subtitle, 0, 25, 5);
+                        playSound(player, sound);
+                    }
+                }
+
+                if (timeRemaining <= 0) {
+                    List<Player> playersToTeleport = Bukkit.getOnlinePlayers().stream()
+                            .filter(player -> isPlayerInZone(player, zone))
+                            .collect(Collectors.toList());
+
+                    if (!playersToTeleport.isEmpty()) {
+                        Location targetLocation = findRandomLocationForZone(zone.getTargetWorld());
+                        if (targetLocation != null) {
+                            String successMsg = color(getConfig().getString("messages.zone_teleport_success", "&bคุณถูกวาร์ปโดย RTP Zone!"));
+                            String sound = getConfig().getString("sounds.zone_teleport", "ENTITY_ENDERMAN_TELEPORT");
+                            for (Player player : playersToTeleport) {
+                                player.teleport(targetLocation);
+                                player.sendMessage(successMsg);
+                                playSound(player, sound);
+                            }
+                        }
+                    }
+                    timeRemaining = zone.getCountdown();
+                } else {
+                    timeRemaining--;
+                }
+            }
+        };
+        BukkitTask task = runnable.runTaskTimer(this, 0L, 20L);
+        zoneCountdownTasks.put(zone.getName().toLowerCase(), task);
+    }
+
+    public boolean isPlayerInZone(Player player, Zone zone) {
+        if (!player.getWorld().getName().equals(zone.getWorldName())) {
+            return false;
+        }
+
+        Location playerLoc = player.getLocation();
+        Location zoneCenter = zone.getCenter();
+        if (zoneCenter == null) return false;
+
+        int zoneY = zoneCenter.getBlockY();
+        int playerY = playerLoc.getBlockY();
+        int checkHeight = getConfig().getInt("zone-vertical-check-height", 4);
+        if (playerY < zoneY || playerY > zoneY + checkHeight) {
+            return false;
+        }
+
+        if (zone.getRequiredBlock() != null) {
+            Block blockStandingOn = player.getLocation().subtract(0, 1, 0).getBlock();
+            if (blockStandingOn.getType() != zone.getRequiredBlock()) {
+                return false;
+            }
+        }
+
+        int radius = zone.getRadius();
+        if (zone.getShape().equalsIgnoreCase("CIRCLE")) {
+            return playerLoc.distanceSquared(zoneCenter) <= (double) (radius * radius);
+        } else { // SQUARE
+            int playerX = playerLoc.getBlockX();
+            int playerZ = playerLoc.getBlockZ();
+            return Math.abs(playerX - zoneCenter.getBlockX()) <= radius &&
+                    Math.abs(playerZ - zoneCenter.getBlockZ()) <= radius;
+        }
+    }
+
+    private Location findRandomLocationForZone(String worldId) {
+        World world = Bukkit.getWorld(worldId);
+        if (world == null) return null;
 
         int radius = getConfig().getInt("radius." + worldId, 2000);
         Location center = world.getSpawnLocation();
@@ -267,11 +539,7 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
                     Block floor = world.getBlockAt(x, y - 1, z);
                     Block feet = world.getBlockAt(x, y, z);
                     Block head = world.getBlockAt(x, y + 1, z);
-
-                    if (floor.getType().isSolid() && floor.getType() != Material.LAVA &&
-                            !feet.getType().isSolid() && !feet.isLiquid() &&
-                            !head.getType().isSolid() && !head.isLiquid())
-                    {
+                    if (floor.getType().isSolid() && floor.getType() != Material.LAVA && !feet.getType().isSolid() && !feet.isLiquid() && !head.getType().isSolid() && !head.isLiquid()) {
                         randomLoc = new Location(world, x + 0.5, y, z + 0.5);
                         break;
                     }
@@ -279,29 +547,15 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
             } else {
                 int y = world.getHighestBlockYAt(x, z);
                 Block floor = world.getBlockAt(x, y, z);
-
                 if (!floor.getType().isSolid() || floor.isLiquid() || floor.getType() == Material.CACTUS) {
                     continue;
                 }
                 randomLoc = new Location(world, x + 0.5, y + 1, z + 0.5);
             }
 
-            if (randomLoc != null) {
-                break;
-            }
+            if (randomLoc != null) return randomLoc;
         }
-
-        if (randomLoc == null) {
-            p.sendMessage(color(getConfig().getString("messages.teleport_fail")));
-            playSound(p, getConfig().getString("sounds.fail", "BLOCK_NOTE_BLOCK_BASS"));
-            return;
-        }
-
-        rtpCooldown.put(p.getUniqueId(), System.currentTimeMillis() / 1000L);
-        p.teleport(randomLoc);
-        playSound(p, getConfig().getString("sounds.teleport", "ENTITY_PLAYER_LEVELUP"));
-        p.sendMessage(color(getConfig().getString("messages.teleport_success", "&aวาร์ปสำเร็จ! ไปยัง {location}")
-                .replace("{location}", String.format("%.1f, %.1f, %.1f", randomLoc.getX(), randomLoc.getY(), randomLoc.getZ()))));
+        return null;
     }
 
     private void playSound(Player p, String sound) {
@@ -331,9 +585,42 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
+        final List<String> suggestions = new ArrayList<>();
+
         if (command.getName().equalsIgnoreCase("bsrurtp")) {
-            if (args.length == 1) return Collections.singletonList("reload");
+            if (args.length == 1) {
+                suggestions.add("reload");
+                suggestions.add("help");
+                suggestions.add("status");
+                suggestions.add("tpzone");
+            }
+            else if (args.length == 2 && args[0].equalsIgnoreCase("tpzone")) {
+                suggestions.addAll(zoneManager.getZoneNames());
+            }
+        } else if (command.getName().equalsIgnoreCase("zonertp")) {
+            if (args.length == 1) {
+                suggestions.add("create");
+                suggestions.add("remove");
+            }
+            else if (args.length == 2 && args[0].equalsIgnoreCase("remove")) {
+                suggestions.addAll(zoneManager.getZoneNames());
+            }
+            else if (args.length == 5 && args[0].equalsIgnoreCase("create")) {
+                suggestions.add("SQUARE");
+                suggestions.add("CIRCLE");
+            }
+            else if (args.length == 6 && args[0].equalsIgnoreCase("create")) {
+                for (Material mat : Material.values()) {
+                    if (mat.isBlock()) {
+                        suggestions.add(mat.name());
+                    }
+                }
+            }
         }
-        return Collections.emptyList();
+
+        final List<String> completions = new ArrayList<>();
+        StringUtil.copyPartialMatches(args[args.length - 1], suggestions, completions);
+        Collections.sort(completions);
+        return completions;
     }
 }

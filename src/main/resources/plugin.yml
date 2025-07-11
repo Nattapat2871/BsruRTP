@@ -1,15 +1,40 @@
+# ชื่อของปลั๊กอิน (ต้องตรงกับชื่อโปรเจกต์)
 name: bsruRTP
+# เวอร์ชั่นของปลั๊กอิน
+version: 1.1.0
+# ตำแหน่งของคลาสหลัก
 main: com.bsru.bsruRTP
-version: 1.0
-api-version: 1.21
+# เวอร์ชั่นของ API ที่ใช้พัฒนา (แนะนำ 1.18 ขึ้นไปเพื่อให้รองรับฟีเจอร์ใหม่ๆ)
+api-version: '1.20'
+# ชื่อผู้พัฒนา
+author: Nattapat2871
+# คำอธิบายปลั๊กอิน
+description: A GUI-based Random Teleport plugin with special RTP Zones.
+
+# ปลั๊กอินที่ทำงานร่วมกัน (แต่ไม่บังคับต้องมี)
+# การใส่ชื่อไว้ตรงนี้จะช่วยให้เซิร์ฟเวอร์โหลด PlaceholderAPI ก่อนปลั๊กอินของเรา (ถ้ามี)
+softdepend: [PlaceholderAPI]
+
+# การลงทะเบียนคำสั่งทั้งหมด
 commands:
   rtp:
-    description: Random Teleport GUI
+    description: Opens the Random Teleport GUI.
     usage: /rtp
   bsrurtp:
-    description: Reload config for bsruRTP
-    usage: /bsrurtp reload
+    description: Main command for the bsruRTP plugin.
+    usage: /bsrurtp [reload]
+  zonertp:
+    description: Manages RTP zones.
+    usage: /zonertp <create|delete|list>
 
+# การกำหนดสิทธิ์ (Permissions)
 permissions:
-  bsruRTP.use:
-    default: true
+  bsrurtp.use:
+    description: Allows players to use the /rtp command.
+    default: true # ให้ผู้เล่นทุกคนใช้ได้เป็นค่าเริ่มต้น
+  bsrurtp.reload:
+    description: Allows reloading the plugin's configuration.
+    default: op # ให้เฉพาะ OP ใช้ได้เป็นค่าเริ่มต้น
+  bsrurtp.admin.zone:
+    description: Allows managing RTP zones with /zonertp.
+    default: op # ให้เฉพาะ OP ใช้ได้เป็นค่าเริ่มต้น
