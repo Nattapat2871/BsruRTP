@@ -58,7 +58,7 @@ messages:
   already_in_rtp: "&cคุณกำลังรอวาร์ปอยู่แล้ว"
   world_not_found: "&cไม่พบโลกนี้"
   teleport_fail: "&cสุ่มจุดวาร์ปล้มเหลว กรุณาลองใหม่"
-  teleport_success: "&aวาร์ปสำเร็จ! ไปยัง {location}"
+  teleport_success: "&aวาร์ปสำเร็จ!"
   rtp_start: "&eสุ่มวาร์ปในอีก {seconds} วินาที ห้ามออกจากบล็อคที่ยืนอยู่!"
   countdown_actionbar: "&eสุ่มวาร์ปในอีก {seconds} วิ"
   rtp_cancel_move: "&cยกเลิกวาร์ปเพราะคุณออกจากบล็อคเดิม"
