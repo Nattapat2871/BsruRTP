@@ -464,8 +464,7 @@ public class bsruRTP extends JavaPlugin implements Listener, TabExecutor {
         rtpCooldown.put(p.getUniqueId(), System.currentTimeMillis() / 1000L);
         p.teleport(randomLoc);
         playSound(p, getConfig().getString("sounds.teleport", "ENTITY_PLAYER_LEVELUP"));
-        p.sendMessage(color(getConfig().getString("messages.teleport_success", "&aวาร์ปสำเร็จ! ไปยัง {location}")
-                .replace("{location}", String.format("%.1f, %.1f, %.1f", randomLoc.getX(), randomLoc.getY(), randomLoc.getZ()))));
+        p.sendMessage(color(getConfig().getString("messages.teleport_success", "&aวาร์ปสำเร็จ!")));
     }
 
     private void startZoneCountdownLoop(Zone zone) {
